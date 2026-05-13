@@ -11,6 +11,13 @@ dependencies = [
   "python-dotenv>=1.0.0"
 ]
 
+[project.optional-dependencies]
+test = [
+  "pytest>=8.0.0",
+  "pytest-asyncio>=0.23.0",
+  "respx>=0.21.0"
+]
+
 [project.scripts]
 eve-online-mcp = "eve_online_mcp.server:main"
 

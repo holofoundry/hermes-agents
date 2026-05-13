@@ -6,6 +6,12 @@
 - What volume of Pioneers was sold last week?
 - How is Tritanium trending globally over the last 30 days?
 - How did Tritanium trend in Jita over the last 30 days?
+- What ships have a bullish price trend in Jita?
+- Which ships are bearish in The Forge?
+- Show bullish ships in Amarr over the last 30 days.
+- Which planetary industry items are bullish in Jita?
+- Show bearish drones in Hek.
+- Which modules are bullish in Dodixie this week?
 - Compare Pioneer sales in The Forge last week with the previous week.
 - What is the current ESI average and adjusted price for Tritanium?
 - Show current sell orders for Tritanium in The Forge.
