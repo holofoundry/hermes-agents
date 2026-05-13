@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "eve-online": {
+      "command": "/absolute/path/to/eve-online-mcp/.venv/bin/python",
+      "args": ["-m", "eve_online_mcp.server"],
+      "cwd": "/absolute/path/to/eve-online-mcp",
+      "env": {
+        "EVE_ESI_BASE_URL": "https://esi.evetech.net/latest",
+        "EVE_ESI_DATASOURCE": "tranquility"
+      }
+    }
+  }
+}
