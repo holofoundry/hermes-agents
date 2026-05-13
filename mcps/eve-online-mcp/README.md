@@ -146,6 +146,60 @@ The tool returns:
 - `global_estimate` from `/markets/prices/`, which is not location-specific.
 - `latest_regional_history` from `/markets/{region_id}/history/`.
 
+### `get_item_global_market_history_analysis`
+
+Analyze global historical market volume and price trends using an item name.
+
+Use this for prompts like:
+
+- "What volume of Pioneers was sold last week?"
+- "How is Tritanium trending over the last 30 days?"
+- "Compare global Pioneer sales last week with the previous week"
+
+Use this by default for historical trend or sold-volume questions when the user does not specify a region or location.
+
+Inputs: `item_name`, `period`, `from_date`, `to_date`, `include_daily_rows`, `include_region_breakdown`.
+
+Supported `period` values:
+
+- `last_week`: previous complete Monday-Sunday window in UTC.
+- `current_week`: current Monday through the latest complete UTC day.
+- `last_7_days`: rolling 7 complete days.
+- `last_14_days`: rolling 14 complete days.
+- `last_30_days`: rolling 30 complete days.
+- `last_month`: previous calendar month.
+- `custom`: requires `from_date` and `to_date` in `YYYY-MM-DD` format.
+
+The tool returns:
+
+- `total_volume`: total units sold over the selected date range.
+- `total_order_count`: total daily order counts reported by ESI.
+- `average_daily_volume`.
+- weighted and simple average prices.
+- high/low price range.
+- first-to-last average price movement.
+- comparison with the previous equal-length period.
+- region breakdown sorted by selected-period volume.
+
+Important: global history is synthesized by aggregating all public ESI regional history. Structure markets are not included because they require EVE SSO.
+
+### `get_item_market_history_analysis`
+
+Analyze historical regional market volume and price trends using item and location names.
+
+Use this only when the user explicitly specifies a region or location:
+
+- "What volume of Pioneers was sold in The Forge last week?"
+- "How did Tritanium trend in Jita over the last 30 days?"
+- "PLEX volume in Amarr from 2026-05-01 to 2026-05-07"
+- "Compare Pioneer sales in The Forge last week with the previous week"
+
+Inputs: `item_name`, `location_name`, `period`, `from_date`, `to_date`, `include_daily_rows`.
+
+This returns the same summary and previous-period comparison shape as the global tool, but for one resolved region.
+
+Important: public ESI market history is regional only. If you ask for a station or system such as Jita, Amarr, Dodixie, Rens, or Hek, this tool analyzes the containing region.
+
 ### `list_market_prices`
 
 List current ESI adjusted and average prices for all public market item types.

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Literal, Mapping
 
 import httpx
@@ -18,6 +18,15 @@ DEFAULT_DATASOURCE = "tranquility"
 OrderType = Literal["buy", "sell", "all"]
 Language = Literal["en", "de", "fr", "ja", "ru", "zh", "ko", "es"]
 LocationScope = Literal["auto", "station", "system", "region"]
+HistoricalPeriod = Literal[
+    "last_week",
+    "current_week",
+    "last_7_days",
+    "last_14_days",
+    "last_30_days",
+    "last_month",
+    "custom",
+]
 
 
 def _region_alias(region_id: int, region_name: str) -> dict[str, Any]:
@@ -219,11 +228,15 @@ mcp = FastMCP(
         "Public EVE Online ESI market data MCP server. "
         "Use get_item_market_quote when a user asks for the price of an EVE item "
         "by name in a place by name, for example 'Tritanium in Jita' or "
-        "'Pioneer in The Forge'. Tritanium, Pioneer, and similar names are EVE "
-        "inventory types, not terrestrial commodities. Lower-level tools are also "
-        "available for IDs, regional orders, regional history, market groups, and "
-        "public universe item/name lookups. This server intentionally does not call "
-        "SSO-protected endpoints."
+        "'Pioneer in The Forge'. Use get_item_global_market_history_analysis when "
+        "a user asks about sold volume, historical prices, or trends without a "
+        "region or location, for example 'What volume of Pioneers sold last week?'. "
+        "Use get_item_market_history_analysis only when the user explicitly names "
+        "a region or location, for example 'Pioneers in The Forge last week'. "
+        "Tritanium, Pioneer, and similar names are EVE inventory types, not terrestrial commodities. "
+        "Lower-level tools are also available for IDs, regional orders, regional "
+        "history, market groups, and public universe item/name lookups. This server "
+        "intentionally does not call SSO-protected endpoints."
     ),
 )
 
@@ -284,6 +297,13 @@ def _clean_limit(value: int, field_name: str, max_value: int) -> int:
     if not (1 <= value <= max_value):
         raise ValueError(f"{field_name} must be between 1 and {max_value}.")
     return value
+
+
+def _parse_date(value: str, field_name: str) -> date:
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must be a YYYY-MM-DD date, got {value!r}.") from exc
 
 
 def _omit_none(params: Mapping[str, Any]) -> dict[str, Any]:
@@ -415,6 +435,12 @@ async def _resolve_inventory_type(item_name: str) -> dict[str, Any]:
     if not resolved.get("ok"):
         return resolved
     matches = resolved.get("data", {}).get("inventory_types") or []
+    if not matches and item_name.strip().lower().endswith("s"):
+        singular = item_name.strip()[:-1]
+        resolved = await _resolve_ids([singular])
+        if not resolved.get("ok"):
+            return resolved
+        matches = resolved.get("data", {}).get("inventory_types") or []
     if not matches:
         return {
             "ok": False,
@@ -540,6 +566,193 @@ def _summarize_orders(orders: list[dict[str, Any]]) -> dict[str, Any]:
         "sell_volume_remain": sum(order.get("volume_remain", 0) for order in sell_orders),
         "buy_volume_remain": sum(order.get("volume_remain", 0) for order in buy_orders),
     }
+
+
+def _resolve_historical_date_range(
+    *,
+    period: HistoricalPeriod,
+    from_date: str | None,
+    to_date: str | None,
+) -> tuple[date, date, str]:
+    today = datetime.now(timezone.utc).date()
+    latest_complete_day = today - timedelta(days=1)
+
+    if from_date or to_date or period == "custom":
+        if not from_date or not to_date:
+            raise ValueError("from_date and to_date are required when period is custom or either date is provided.")
+        start = _parse_date(from_date, "from_date")
+        end = _parse_date(to_date, "to_date")
+        if start > end:
+            raise ValueError("from_date must be on or before to_date.")
+        return start, end, "custom"
+
+    if period == "last_week":
+        current_week_start = today - timedelta(days=today.isoweekday() - 1)
+        start = current_week_start - timedelta(days=7)
+        return start, start + timedelta(days=6), "previous_complete_monday_to_sunday"
+
+    if period == "current_week":
+        start = today - timedelta(days=today.isoweekday() - 1)
+        return start, latest_complete_day, "current_week_to_latest_complete_day"
+
+    if period == "last_7_days":
+        return latest_complete_day - timedelta(days=6), latest_complete_day, "rolling_last_7_complete_days"
+
+    if period == "last_14_days":
+        return latest_complete_day - timedelta(days=13), latest_complete_day, "rolling_last_14_complete_days"
+
+    if period == "last_30_days":
+        return latest_complete_day - timedelta(days=29), latest_complete_day, "rolling_last_30_complete_days"
+
+    if period == "last_month":
+        first_of_this_month = today.replace(day=1)
+        last_of_previous_month = first_of_this_month - timedelta(days=1)
+        first_of_previous_month = last_of_previous_month.replace(day=1)
+        return first_of_previous_month, last_of_previous_month, "previous_calendar_month"
+
+    raise ValueError(f"Unsupported period: {period!r}.")
+
+
+def _previous_period(start: date, end: date) -> tuple[date, date]:
+    days = (end - start).days + 1
+    previous_end = start - timedelta(days=1)
+    return previous_end - timedelta(days=days - 1), previous_end
+
+
+def _filter_history_rows(rows: list[dict[str, Any]], start: date, end: date) -> list[dict[str, Any]]:
+    selected = []
+    for row in rows:
+        row_date = _parse_date(row["date"], "history row date")
+        if start <= row_date <= end:
+            selected.append(row)
+    return selected
+
+
+def _percent_change(current: float | int | None, previous: float | int | None) -> float | None:
+    if previous in (None, 0) or current is None:
+        return None
+    return ((float(current) - float(previous)) / float(previous)) * 100
+
+
+def _summarize_history_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    if not rows:
+        return {
+            "day_count": 0,
+            "total_volume": 0,
+            "total_order_count": 0,
+            "average_daily_volume": None,
+            "weighted_average_price": None,
+            "simple_average_price": None,
+            "lowest_price": None,
+            "highest_price": None,
+            "first_date": None,
+            "last_date": None,
+            "first_average": None,
+            "last_average": None,
+            "average_price_change": None,
+            "average_price_change_percent": None,
+        }
+
+    total_volume = sum(row.get("volume", 0) for row in rows)
+    total_order_count = sum(row.get("order_count", 0) for row in rows)
+    weighted_average_price = (
+        sum(row["average"] * row.get("volume", 0) for row in rows) / total_volume
+        if total_volume
+        else None
+    )
+    first_average = rows[0]["average"]
+    last_average = rows[-1]["average"]
+    return {
+        "day_count": len(rows),
+        "total_volume": total_volume,
+        "total_order_count": total_order_count,
+        "average_daily_volume": total_volume / len(rows),
+        "weighted_average_price": weighted_average_price,
+        "simple_average_price": sum(row["average"] for row in rows) / len(rows),
+        "lowest_price": min(row["lowest"] for row in rows),
+        "highest_price": max(row["highest"] for row in rows),
+        "first_date": rows[0]["date"],
+        "last_date": rows[-1]["date"],
+        "first_average": first_average,
+        "last_average": last_average,
+        "average_price_change": last_average - first_average,
+        "average_price_change_percent": _percent_change(last_average, first_average),
+    }
+
+
+def _compare_history_summaries(
+    summary: Mapping[str, Any],
+    previous_summary: Mapping[str, Any],
+    previous_start: date,
+    previous_end: date,
+) -> dict[str, Any]:
+    return {
+        "previous_from_date": previous_start.isoformat(),
+        "previous_to_date": previous_end.isoformat(),
+        "previous_day_count": previous_summary["day_count"],
+        "previous_total_volume": previous_summary["total_volume"],
+        "previous_weighted_average_price": previous_summary["weighted_average_price"],
+        "volume_change": summary["total_volume"] - previous_summary["total_volume"],
+        "volume_change_percent": _percent_change(
+            summary["total_volume"],
+            previous_summary["total_volume"],
+        ),
+        "weighted_average_price_change": (
+            summary["weighted_average_price"] - previous_summary["weighted_average_price"]
+            if summary["weighted_average_price"] is not None
+            and previous_summary["weighted_average_price"] is not None
+            else None
+        ),
+        "weighted_average_price_change_percent": _percent_change(
+            summary["weighted_average_price"],
+            previous_summary["weighted_average_price"],
+        ),
+    }
+
+
+def _region_aliases() -> list[dict[str, Any]]:
+    regions_by_id: dict[int, dict[str, Any]] = {}
+    for alias in LOCATION_ALIASES.values():
+        if alias.get("default_scope") == "region":
+            regions_by_id[alias["region_id"]] = alias
+    return sorted(regions_by_id.values(), key=lambda region: region["region_name"])
+
+
+def _aggregate_global_daily_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_date: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        bucket = by_date.setdefault(
+            row["date"],
+            {
+                "date": row["date"],
+                "volume": 0,
+                "order_count": 0,
+                "highest": None,
+                "lowest": None,
+                "_weighted_price_total": 0.0,
+            },
+        )
+        volume = row.get("volume", 0)
+        bucket["volume"] += volume
+        bucket["order_count"] += row.get("order_count", 0)
+        bucket["_weighted_price_total"] += row["average"] * volume
+        bucket["highest"] = (
+            row["highest"]
+            if bucket["highest"] is None
+            else max(bucket["highest"], row["highest"])
+        )
+        bucket["lowest"] = (
+            row["lowest"]
+            if bucket["lowest"] is None
+            else min(bucket["lowest"], row["lowest"])
+        )
+
+    daily_rows = []
+    for row in sorted(by_date.values(), key=lambda item: item["date"]):
+        weighted_total = row.pop("_weighted_price_total")
+        row["average"] = weighted_total / row["volume"] if row["volume"] else 0
+        daily_rows.append(row)
+    return daily_rows
 
 
 @mcp.tool()
@@ -686,6 +899,255 @@ async def get_region_market_history(region_id: int, type_id: int) -> dict[str, A
 
 
 @mcp.tool()
+async def get_item_market_history_analysis(
+    item_name: str,
+    location_name: str,
+    period: HistoricalPeriod = "last_week",
+    from_date: str | None = None,
+    to_date: str | None = None,
+    include_daily_rows: bool = False,
+) -> dict[str, Any]:
+    """Analyze historical regional market volume and price trends for an EVE item.
+
+    Use this only when the user explicitly names a region or location, such as
+    "Pioneers in The Forge last week", "Tritanium in Jita over the last 30 days",
+    or "PLEX volume in Amarr from 2026-05-01 to 2026-05-07". It resolves item and
+    location names, fetches public ESI daily regional history, filters the requested
+    date window, totals sold volume and order count, calculates weighted/simple
+    average prices, high/low range, first-to-last price movement, and compares with
+    the previous equal-length period.
+
+    Use get_item_global_market_history_analysis instead when the user asks for
+    historical volume or trends without specifying a region or location.
+
+    ESI market history is regional only. If location_name is a station or system
+    such as Jita, Amarr, Dodixie, Rens, or Hek, this tool analyzes the containing
+    region, not station-level or system-level completed sales.
+    """
+    item = await _resolve_inventory_type(item_name)
+    if not item.get("ok"):
+        return item
+    location = await _resolve_location(location_name)
+    if not location.get("ok"):
+        return location
+
+    start, end, range_source = _resolve_historical_date_range(
+        period=period,
+        from_date=from_date,
+        to_date=to_date,
+    )
+    previous_start, previous_end = _previous_period(start, end)
+
+    type_id = item["data"]["id"]
+    region_id = location["data"]["region_id"]
+    history = await get_region_market_history(region_id, type_id)
+    if not history.get("ok"):
+        return history
+
+    all_rows = history.get("data") or []
+    selected_rows = _filter_history_rows(all_rows, start, end)
+    previous_rows = _filter_history_rows(all_rows, previous_start, previous_end)
+    summary = _summarize_history_rows(selected_rows)
+    previous_summary = _summarize_history_rows(previous_rows)
+    comparison = _compare_history_summaries(
+        summary,
+        previous_summary,
+        previous_start,
+        previous_end,
+    )
+    payload: dict[str, Any] = {
+        "ok": True,
+        "data": {
+            "item": {
+                "name": item["data"]["name"],
+                "type_id": type_id,
+            },
+            "location": {
+                **location["data"],
+                "scope_used": "region",
+                "history_region_id": region_id,
+                "history_region_name": location["data"].get("region_name"),
+            },
+            "date_range": {
+                "period": period,
+                "from_date": start.isoformat(),
+                "to_date": end.isoformat(),
+                "range_source": range_source,
+            },
+            "summary": summary,
+            "comparison": comparison,
+        },
+        "meta": {
+            **history.get("meta", {}),
+            "history_scope": "region",
+            "notes": [
+                "ESI market history reports completed regional market activity, not station-level sales.",
+                "For station aliases such as Jita or Amarr, this tool analyzes the containing region.",
+                "last_week means the previous complete Monday-Sunday window in UTC.",
+                "Rolling periods end on the latest complete UTC day because today's ESI history may be incomplete.",
+            ],
+        },
+    }
+    if include_daily_rows:
+        payload["data"]["daily_rows"] = selected_rows
+        payload["data"]["previous_daily_rows"] = previous_rows
+    return payload
+
+
+@mcp.tool()
+async def get_item_global_market_history_analysis(
+    item_name: str,
+    period: HistoricalPeriod = "last_week",
+    from_date: str | None = None,
+    to_date: str | None = None,
+    include_daily_rows: bool = False,
+    include_region_breakdown: bool = True,
+) -> dict[str, Any]:
+    """Analyze global historical market volume and price trends for an EVE item.
+
+    Use this by default for historical volume or trend questions that do not name a
+    region or location, such as "What volume of Pioneers was sold last week?" or
+    "How is Tritanium trending?". It resolves the item name, fetches public ESI
+    daily regional history for every public region alias, aggregates those regional
+    rows into a global daily timeline, and compares the selected period with the
+    previous equal-length period.
+
+    "Global" means all public ESI regions. Structure markets are not included
+    because they require EVE SSO.
+    """
+    item = await _resolve_inventory_type(item_name)
+    if not item.get("ok"):
+        return item
+
+    start, end, range_source = _resolve_historical_date_range(
+        period=period,
+        from_date=from_date,
+        to_date=to_date,
+    )
+    previous_start, previous_end = _previous_period(start, end)
+    type_id = item["data"]["id"]
+
+    selected_regional_rows: list[dict[str, Any]] = []
+    previous_regional_rows: list[dict[str, Any]] = []
+    region_breakdown: list[dict[str, Any]] = []
+    successful_regions: list[dict[str, Any]] = []
+    empty_regions: list[dict[str, Any]] = []
+    failed_regions: list[dict[str, Any]] = []
+
+    for region in _region_aliases():
+        region_id = region["region_id"]
+        history = await get_region_market_history(region_id, type_id)
+        region_info = {
+            "region_id": region_id,
+            "region_name": region["region_name"],
+        }
+        if not history.get("ok"):
+            status_code = history.get("status_code")
+            if status_code in {400, 404, 422}:
+                empty_regions.append({**region_info, "status_code": status_code})
+            else:
+                failed_regions.append(
+                    {
+                        **region_info,
+                        "status_code": status_code,
+                        "error": history.get("error"),
+                    }
+                )
+            continue
+
+        all_rows = history.get("data") or []
+        selected_rows = _filter_history_rows(all_rows, start, end)
+        previous_rows = _filter_history_rows(all_rows, previous_start, previous_end)
+        if not selected_rows and not previous_rows:
+            empty_regions.append(region_info)
+            successful_regions.append(region_info)
+            continue
+
+        successful_regions.append(region_info)
+        selected_regional_rows.extend(selected_rows)
+        previous_regional_rows.extend(previous_rows)
+        if include_region_breakdown:
+            region_summary = _summarize_history_rows(selected_rows)
+            previous_region_summary = _summarize_history_rows(previous_rows)
+            region_breakdown.append(
+                {
+                    **region_info,
+                    "summary": region_summary,
+                    "comparison": _compare_history_summaries(
+                        region_summary,
+                        previous_region_summary,
+                        previous_start,
+                        previous_end,
+                    ),
+                }
+            )
+
+    if not successful_regions:
+        return {
+            "ok": False,
+            "error": "Failed to fetch historical market data for all public ESI regions.",
+            "failed_regions": failed_regions,
+            "empty_regions": empty_regions,
+        }
+
+    global_daily_rows = _aggregate_global_daily_rows(selected_regional_rows)
+    previous_global_daily_rows = _aggregate_global_daily_rows(previous_regional_rows)
+    summary = _summarize_history_rows(global_daily_rows)
+    previous_summary = _summarize_history_rows(previous_global_daily_rows)
+    region_breakdown.sort(
+        key=lambda item: item["summary"]["total_volume"],
+        reverse=True,
+    )
+
+    payload: dict[str, Any] = {
+        "ok": True,
+        "data": {
+            "item": {
+                "name": item["data"]["name"],
+                "type_id": type_id,
+            },
+            "market_scope": "global",
+            "date_range": {
+                "period": period,
+                "from_date": start.isoformat(),
+                "to_date": end.isoformat(),
+                "range_source": range_source,
+            },
+            "summary": summary,
+            "comparison": _compare_history_summaries(
+                summary,
+                previous_summary,
+                previous_start,
+                previous_end,
+            ),
+        },
+        "meta": {
+            "history_scope": "global",
+            "region_count": len(_region_aliases()),
+            "successful_region_count": len(successful_regions),
+            "empty_region_count": len(empty_regions),
+            "failed_region_count": len(failed_regions),
+            "successful_regions": successful_regions,
+            "empty_regions": empty_regions,
+            "failed_regions": failed_regions,
+            "notes": [
+                "Global history is synthesized by aggregating public ESI regional history.",
+                "Structure markets are not included because they require EVE SSO.",
+                "Use get_item_market_history_analysis only when the user specifies a region or location.",
+                "last_week means the previous complete Monday-Sunday window in UTC.",
+                "Rolling periods end on the latest complete UTC day because today's ESI history may be incomplete.",
+            ],
+        },
+    }
+    if include_region_breakdown:
+        payload["data"]["region_breakdown"] = region_breakdown
+    if include_daily_rows:
+        payload["data"]["daily_rows"] = global_daily_rows
+        payload["data"]["previous_daily_rows"] = previous_global_daily_rows
+    return payload
+
+
+@mcp.tool()
 async def list_region_market_types(region_id: int, page: int = 1) -> dict[str, Any]:
     """List item type IDs that have public market data in a region."""
     clean_region_id = _clean_positive_int(region_id, "region_id")
@@ -804,6 +1266,11 @@ def usage_notes() -> str:
         "It accepts item and location names such as Tritanium in Jita, Pioneer in The Forge, "
         "or PLEX in Jita. Common IDs: The Forge region is 10000002, Jita system is "
         "30000142, Jita 4-4 station is 60003760, and Tritanium type_id is 34. "
+        "For historical volume, sold-volume, or trend questions without a named "
+        "region or location, use get_item_global_market_history_analysis. Use "
+        "get_item_market_history_analysis only when the user specifies a region or "
+        "location; ESI regional history means station aliases are analyzed through "
+        "their containing region. "
         "Use list_market_prices or get_market_price for global estimates, "
         "get_region_market_orders for live regional orders, and get_region_market_history "
         "for daily regional statistics."
