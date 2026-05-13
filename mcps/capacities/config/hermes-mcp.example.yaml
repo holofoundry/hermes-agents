@@ -1,0 +1,14 @@
+mcp_servers:
+  capacities:
+    command: "/absolute/path/to/capacities-mcp/.venv/bin/python"
+    args:
+      - "-m"
+      - "capacities_mcp.server"
+    env:
+      CAPACITIES_API_TOKEN: "your_capacities_api_token_here"
+    enabled: true
+    timeout: 120
+    connect_timeout: 60
+    tools:
+      resources: false
+      prompts: false

@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "massive-forex": {
+      "command": "/absolute/path/to/massive_forex_mcp/.venv/bin/python",
+      "args": ["-m", "massive_forex_mcp.server"],
+      "cwd": "/absolute/path/to/massive_forex_mcp",
+      "env": {
+        "MASSIVE_API_KEY": "${MASSIVE_API_KEY}",
+        "MASSIVE_API_BASE": "https://api.polygon.io"
+      }
+    }
+  }
+}

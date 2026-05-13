@@ -1,0 +1,9 @@
+{
+  "target": "ExampleCo",
+  "as_of_date": "2026-05-12",
+  "peers": [
+    {"name": "Peer A", "ticker": "PRA", "market_cap": 5200, "enterprise_value": 5800, "revenue": 1100, "ebitda": 260, "ebit": 210, "net_income": 150},
+    {"name": "Peer B", "ticker": "PRB", "market_cap": 4100, "enterprise_value": 4550, "revenue": 900, "ebitda": 180, "ebit": 130, "net_income": 90},
+    {"name": "Peer C", "ticker": "PRC", "market_cap": 7200, "enterprise_value": 7600, "revenue": 1500, "ebitda": 360, "ebit": 300, "net_income": 240}
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "client_or_company": "ExampleCo",
+  "meeting_date": "2026-05-20",
+  "objective": "Quarterly strategy review",
+  "attendees": ["CFO", "Coverage banker"],
+  "relationship_context": ["Existing client", "Refinancing discussion last quarter"],
+  "recent_developments": ["New product launch", "Margin pressure in Europe"],
+  "open_items": ["Confirm debt maturity schedule"],
+  "suggested_questions": ["What changed in the sales pipeline?", "How should we think about capex next year?"],
+  "risks_or_sensitivities": ["Do not share internal valuation range"],
+  "next_steps": ["Update briefing pack after latest management accounts arrive"]
+}

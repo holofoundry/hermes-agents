@@ -1,0 +1,12 @@
+{
+  "entity_name": "Example Holdings Ltd",
+  "jurisdiction": "GB",
+  "risk_rating": "medium",
+  "required_documents": ["registration", "beneficial_ownership", "proof_of_address", "tax_form"],
+  "provided_documents": ["registration", "proof_of_address"],
+  "beneficial_owners": [],
+  "sanctions_hit": false,
+  "pep_hit": false,
+  "adverse_media": false,
+  "high_risk_jurisdiction": false
+}

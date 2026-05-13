@@ -1,0 +1,18 @@
+[project]
+name = "massive-forex-mcp"
+version = "0.1.0"
+description = "A focused MCP server for Massive.com Forex REST API access."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Holo Foundry" }]
+dependencies = [
+  "mcp[cli]>=1.0.0",
+  "httpx>=0.27.0",
+  "python-dotenv>=1.0.0"
+]
+
+[project.scripts]
+massive-forex-mcp = "massive_forex_mcp.server:main"
+
+[tool.setuptools.packages.find]
+include = ["massive_forex_mcp*"]

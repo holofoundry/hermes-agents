@@ -1,0 +1,40 @@
+{
+  "tools": [
+    {
+      "name": "build_dcf_model",
+      "description": "Build a review-ready DCF valuation summary and optional XLSX workbook.",
+      "module": "financial_services_agent.tools",
+      "function": "build_dcf_model"
+    },
+    {
+      "name": "build_comps_summary",
+      "description": "Calculate comparable company multiples and summary statistics.",
+      "module": "financial_services_agent.tools",
+      "function": "build_comps_summary"
+    },
+    {
+      "name": "reconcile_ledgers",
+      "description": "Compare GL and subledger rows and return matched items plus breaks.",
+      "module": "financial_services_agent.tools",
+      "function": "reconcile_ledgers"
+    },
+    {
+      "name": "screen_kyc",
+      "description": "Stage a KYC completeness and escalation review without approving onboarding.",
+      "module": "financial_services_agent.tools",
+      "function": "screen_kyc"
+    },
+    {
+      "name": "prepare_meeting_brief",
+      "description": "Create a structured internal meeting briefing draft.",
+      "module": "financial_services_agent.tools",
+      "function": "prepare_meeting_brief"
+    },
+    {
+      "name": "review_earnings",
+      "description": "Compare reported earnings against consensus and draft review sections.",
+      "module": "financial_services_agent.tools",
+      "function": "review_earnings"
+    }
+  ]
+}

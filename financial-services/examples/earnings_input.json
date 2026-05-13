@@ -1,0 +1,13 @@
+{
+  "company": "ExampleCo",
+  "ticker": "EXM",
+  "period": "Q1 2026",
+  "reported": {"revenue": 275, "ebitda": 62, "eps": 0.42},
+  "consensus": {"revenue": 268, "ebitda": 60, "eps": 0.40},
+  "guidance_changes": ["Raised full-year revenue growth outlook by 100 bps"],
+  "management_commentary": ["Demand remains strongest in enterprise segment"],
+  "what_changed": ["Revenue and EPS beat consensus"],
+  "why_it_matters": ["Beat supports base-case growth assumptions"],
+  "risks": ["Gross margin still below prior-year level"],
+  "follow_up_questions": ["How much of the enterprise demand is recurring?"]
+}

@@ -1,0 +1,18 @@
+{
+  "company": "ExampleCo",
+  "ticker": "EXM",
+  "currency": "USD millions",
+  "base_year_revenue": 1000,
+  "revenue_growth": 0.08,
+  "ebit_margin": 0.20,
+  "tax_rate": 0.24,
+  "da_pct_revenue": 0.03,
+  "capex_pct_revenue": 0.045,
+  "nwc_pct_revenue": 0.015,
+  "discount_rate": 0.10,
+  "terminal_growth_rate": 0.025,
+  "cash": 120,
+  "debt": 300,
+  "shares_outstanding": 100,
+  "projection_years": 5
+}

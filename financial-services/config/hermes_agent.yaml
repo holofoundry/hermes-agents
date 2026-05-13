@@ -1,0 +1,55 @@
+name: hermes-financial-services-agent
+version: 0.1.0
+role: local financial-services workflow agent
+system_prompt: ../system_prompt.md
+skills_dir: ../skills
+output_dir: ../out
+
+runtime:
+  default_model: local-hermes
+  mode: headless
+  max_untrusted_text_chars: 12000
+  require_human_review: true
+
+connectors:
+  market_data:
+    enabled: false
+    mode: read_only
+    description: Map to CapIQ, FactSet, Daloopa, LSEG, Morningstar, SEC, or your internal provider.
+  crm:
+    enabled: false
+    mode: read_only
+  document_store:
+    enabled: false
+    mode: read_only
+  ledger:
+    enabled: false
+    mode: read_only
+  subledger:
+    enabled: false
+    mode: read_only
+
+python_tools:
+  module: financial_services_agent.tools
+  functions:
+    - build_dcf_model
+    - build_comps_summary
+    - reconcile_ledgers
+    - screen_kyc
+    - prepare_meeting_brief
+    - review_earnings
+
+guardrails:
+  prohibited_actions:
+    - execute_trades
+    - post_journal_entries
+    - approve_kyc
+    - approve_valuation
+    - send_client_communications
+    - provide_personalized_investment_advice
+  required_behaviors:
+    - cite_data_sources
+    - separate_facts_from_assumptions
+    - stage_outputs_for_review
+    - flag_missing_inputs
+    - write_only_to_output_dir
