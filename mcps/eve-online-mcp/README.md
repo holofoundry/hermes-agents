@@ -68,7 +68,7 @@ Add this as a top-level key in `~/.hermes/config.yaml`:
 ```yaml
 mcp_servers:
   eveonline:
-    command: "/absolute/path/to/capacities-mcp/.venv/bin/python"
+    command: "/absolute/path/to/eve-online-mcp/.venv/bin/python"
     args:
       - "-m"
       - "eve_online_mcp.server"
@@ -84,7 +84,7 @@ mcp_servers:
 Then test:
 
 ```bash
-hermes mcp test capacities
+hermes mcp test eveonline
 ```
 
 ## Configuration
@@ -111,17 +111,31 @@ Use this first for normal prompts like:
 - "price of Tritanium in Jita"
 - "Pioneer in The Forge"
 - "PLEX in Jita"
+- "Tritanium in Amarr"
+- "PLEX in Dodixie"
 
 Inputs: `item_name`, `location_name`, `location_scope`, `max_pages`.
 
-For `location_name=Jita`, `location_scope=auto` means the Jita 4-4 trade hub station:
+For known trade hubs, `location_scope=auto` means the main market station:
 
 ```text
-Jita IV - Moon 4 - Caldari Navy Assembly Plant
-station_id: 60003760
-system_id: 30000142
-region_id: 10000002
+Jita -> Jita IV - Moon 4 - Caldari Navy Assembly Plant
+station_id: 60003760, system_id: 30000142, region_id: 10000002
+
+Amarr -> Amarr VIII (Oris) - Emperor Family Academy
+station_id: 60008494, system_id: 30002187, region_id: 10000043
+
+Dodixie -> Dodixie IX - Moon 20 - Federation Navy Assembly Plant
+station_id: 60011866, system_id: 30002659, region_id: 10000032
+
+Rens -> Rens VI - Moon 8 - Brutor Tribe Treasury
+station_id: 60004588, system_id: 30002510, region_id: 10000030
+
+Hek -> Hek VIII - Moon 12 - Boundless Creation Factory
+station_id: 60005686, system_id: 30002053, region_id: 10000042
 ```
+
+All ESI regions are also available as location aliases. Region names resolve with `default_scope=region`; trade hub shortcuts resolve with `default_scope=station`.
 
 The tool returns:
 
@@ -182,7 +196,7 @@ Inputs: `type_id`, `language`.
 
 Resolve exact EVE names to IDs.
 
-Input: `names_json`, a JSON array of strings such as `["Tritanium", "Pioneer", "Jita", "The Forge"]`.
+Input: `names_json`, a JSON array of strings such as `["Tritanium", "Pioneer", "Jita", "Amarr", "The Forge"]`.
 
 Prefer `get_item_market_quote` for price requests; use this helper when you only need IDs.
 
